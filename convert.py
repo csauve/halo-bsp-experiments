@@ -5,7 +5,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 #https://github.com/Sigmmma/reclaimer/blob/master/reclaimer/hek/defs/coll.py
-bsp_path = "/home/csauve/haloce/tags/levels/test/bloodgulch/bloodgulch.scenario_structure_bsp"
+bsp_path = "/home/csauve/haloce/tags/levels/test/dangercanyon/dangercanyon.scenario_structure_bsp"
 bsp = sbsp_def.build(filepath=bsp_path).data.tagdata
 bsp3d_nodes = bsp.collision_bsp.collision_bsp_array[0].bsp3d_nodes.bsp3d_nodes_array
 bsp2d_nodes = bsp.collision_bsp.collision_bsp_array[0].bsp2d_nodes.bsp2d_nodes_array
@@ -33,41 +33,64 @@ dae = collada.Collada()
 vert_floats = [[v.x, v.y, v.z] for v in bsp_verts]
 normal_floats = [[p.i, p.j, p.k] for p in bsp_planes]
 
-vert_src = collada.source.FloatSource("vertices", np.array(vert_floats).flatten(), ("X", "Y", "Z"))
-normal_src = collada.source.FloatSource("normals", np.array(normal_floats).flatten(), ("X", "Y", "Z"))
-
 mtl_effect_surface = collada.material.Effect("mtl_effect_surface", [], "phong", diffuse=(0.5, 0.5, 0.5), specular=(0, 1, 0))
 mtl_surface = collada.material.Material("mtl_surface", "mtl_surface", mtl_effect_surface)
 dae.effects.append(mtl_effect_surface)
 dae.materials.append(mtl_surface)
 
+mtl_effect_surface_flagged = collada.material.Effect("mtl_effect_surface_flagged", [], "phong", diffuse=(1.0, 0.5, 0.5), specular=(0, 1, 0))
+mtl_surface_flagged = collada.material.Material("mtl_surface_flagged", "mtl_surface_flagged", mtl_effect_surface_flagged)
+dae.effects.append(mtl_effect_surface_flagged)
+dae.materials.append(mtl_surface_flagged)
+
+sfc_count = 0
+
 def gen_surface_geometry(bsp_vert_indices, bsp_plane_index, surface_name):
-    print(surface_name)
-    geom = collada.geometry.Geometry(dae, surface_name, surface_name, [vert_src, normal_src])
+    vert_src_name = surface_name + "_verts"
+    surface_vert_floats = np.array([vert_floats[v] for v in bsp_vert_indices]).flatten()
+    vert_src = collada.source.FloatSource(vert_src_name, surface_vert_floats, ("X", "Y", "Z"))
+
+    mtl_name = "mtl_surface"
+    if bsp_plane_index < 0 or bsp_plane_index >= len(normal_floats):
+        bsp_plane_index = bsp_plane_index & 0x7FFFFFFF
+        mtl_name = "mtl_surface_flagged"
+        print("Flagged plane index? " + str(bsp_plane_index))
+
+    normal_src_name = surface_name + "_normals"
+    surface_normal_floats = np.array(normal_floats[bsp_plane_index])
+    normal_src = collada.source.FloatSource(normal_src_name, surface_normal_floats, ("X", "Y", "Z"))
+
     input_list = collada.source.InputList()
-    input_list.addInput(0, "VERTEX", "#vertices")
-    input_list.addInput(1, "NORMAL", "#normals")
-    indices = np.array([[v, bsp_plane_index] for v in bsp_vert_indices]).flatten()
-    vcounts = np.array([len(bsp_vert_indices)])
-    poly = geom.createPolylist(indices, vcounts, input_list, "mtl_surface")
-    matnode = collada.scene.MaterialNode("mtl_surface", mtl_surface, inputs=[])
+    input_list.addInput(0, "VERTEX", "#" + vert_src_name)
+    input_list.addInput(1, "NORMAL", "#" + normal_src_name)
+
+    num_verts = len(bsp_vert_indices)
+    geom = collada.geometry.Geometry(dae, surface_name, surface_name, [vert_src, normal_src])
+    indices = np.array([[v, 0] for v in range(0, num_verts)]).flatten()
+    vcounts = np.array([num_verts])
+    poly = geom.createPolylist(indices, vcounts, input_list, mtl_name)
+    matnode = collada.scene.MaterialNode("mtl", mtl_surface, inputs=[])
     geom.primitives.append(poly)
     dae.geometries.append(geom)
+    global sfc_count
+    sfc_count = sfc_count + 1
     return collada.scene.GeometryNode(geom, [matnode])
 
 def gen_surface_node(bsp_surface_index):
     bsp_surface = bsp_surfaces[bsp_surface_index]
     first_edge = bsp_edges[bsp_surface.first_edge]
-    edges = [first_edge]
+    bsp_vert_indices = []
+    curr_edge = first_edge
     while True:
-        curr_edge = edges[-1]
         forward = curr_edge.left_surface == bsp_surface_index
+        bsp_vert_indices.append(curr_edge.start_vertex if forward else curr_edge.end_vertex)
         next_edge_index = curr_edge["forward_edge" if forward else "reverse_edge"]
         if next_edge_index == bsp_surface.first_edge:
             break
-        edges.append(bsp_edges[next_edge_index])
-    bsp_vert_indices = [e.start_vertex for e in edges]
-    return gen_surface_geometry(bsp_vert_indices, bsp_surface.plane, "surface_" + str(bsp_surface_index))
+        curr_edge = bsp_edges[next_edge_index]
+    surface_name = "surface_" + str(bsp_surface_index)
+    geometry_node = gen_surface_geometry(bsp_vert_indices, bsp_surface.plane, surface_name)
+    return collada.scene.Node(surface_name, children=[geometry_node])
 
 def gen_bsp2d_node(bsp2d_node_index):
     if bsp2d_node_index & 0x80000000 != 0:
@@ -75,13 +98,12 @@ def gen_bsp2d_node(bsp2d_node_index):
         return gen_surface_node(bsp_surface_index)
     else:
         bsp2d_node = bsp2d_nodes[bsp2d_node_index]
-        left_child_node = gen_bsp2d_node(bsp2d_node.left_child)
-        right_child_node = gen_bsp2d_node(bsp2d_node.right_child)
-        children = []
-        if left_child_node is not None:
-            children.append(left_child_node)
-        if right_child_node is not None:
-            children.append(right_child_node)
+        if bsp2d_node.right_child == bsp2d_node.left_child:
+            raise Exception("wat!")
+        children = [
+            gen_bsp2d_node(bsp2d_node.left_child),
+            gen_bsp2d_node(bsp2d_node.right_child)
+        ]
         return collada.scene.Node("bsp2d_node_" + str(bsp2d_node_index), children=children)
 
 def gen_bsp2d_reference_node(bsp2d_reference_index):
@@ -92,7 +114,9 @@ def gen_leaf_node(bsp_leaf_index):
     bsp_leaf = bsp_leaves[bsp_leaf_index]
     bsp2d_ref_count = bsp_leaf.bsp2d_reference_count
     bsp2d_ref_first = bsp_leaf.first_bsp2d_reference
-    children = [gen_bsp2d_reference_node(i) for i in range(bsp2d_ref_first, bsp2d_ref_first + bsp2d_ref_count)]
+    children = []
+    if bsp2d_ref_count > 0:
+        children = [gen_bsp2d_reference_node(i) for i in range(bsp2d_ref_first, bsp2d_ref_first + bsp2d_ref_count)]
     return collada.scene.Node("leaf_" + str(bsp_leaf_index), children=children)
 
 def gen_bsp3d_node(bsp3d_node_index):
@@ -120,3 +144,6 @@ scene = collada.scene.Scene("bsp_scene", [root_node])
 dae.scenes.append(scene)
 dae.scene = scene
 dae.write("./bsp.dae")
+
+print("BSP surfaces: " + str(len(bsp_surfaces)))
+print("Gen surfaces: " + str(sfc_count))
