@@ -18,18 +18,6 @@ bsp_verts = bsp.collision_bsp.collision_bsp_array[0].vertices.vertices_array
 
 dae = collada.Collada()
 
-# def gen_plane_geometry_node(plane_index, bsp3d_node_index):
-#     plane_name = "plane_" + str(bsp3d_node_index)
-#     bsp_plane = bsp_planes[plane_index]
-#     bsp_plane_normal = [bsp_plane.i, bsp_plane.j, bsp_plane.k]
-#     init_normal = [0., 0, 1]
-#     rot_axis = np.cross(bsp_plane_normal, init_normal)
-#     rot_angle = None
-#     rot_matrix = R.from_rotvec()
-#     plane_geom = collada.geometry.Geometry(dae, plane_name, plane_name, [vert_src, normal_src], double_sided=True)
-#     plane_geometry_node = collada.scene.GeometryNode(plane_geom)
-#     return plane_geometry_node
-
 vert_floats = [[v.x, v.y, v.z] for v in bsp_verts]
 normal_floats = [[p.i, p.j, p.k] for p in bsp_planes]
 
@@ -76,11 +64,12 @@ def gen_surface_geometry(bsp_vert_indices, bsp_plane_index, surface_name):
     sfc_count = sfc_count + 1
     return collada.scene.GeometryNode(geom, [matnode])
 
-def gen_surface_node(bsp_surface_index):
+def gen_surface_node(bsp_surface_index, node_name):
     bsp_surface = bsp_surfaces[bsp_surface_index]
     first_edge = bsp_edges[bsp_surface.first_edge]
     bsp_vert_indices = []
     curr_edge = first_edge
+
     while True:
         forward = curr_edge.left_surface == bsp_surface_index
         bsp_vert_indices.append(curr_edge.start_vertex if forward else curr_edge.end_vertex)
@@ -88,14 +77,13 @@ def gen_surface_node(bsp_surface_index):
         if next_edge_index == bsp_surface.first_edge:
             break
         curr_edge = bsp_edges[next_edge_index]
-    surface_name = "surface_" + str(bsp_surface_index)
-    geometry_node = gen_surface_geometry(bsp_vert_indices, bsp_surface.plane, surface_name)
-    return collada.scene.Node(surface_name, children=[geometry_node])
+    geometry_node = gen_surface_geometry(bsp_vert_indices, bsp_surface.plane, node_name)
+    return collada.scene.Node(node_name, children=[geometry_node])
 
 def gen_bsp2d_node(bsp2d_node_index):
     if bsp2d_node_index & 0x80000000 != 0:
         bsp_surface_index = bsp2d_node_index & 0x7FFFFFFF
-        return gen_surface_node(bsp_surface_index)
+        return gen_surface_node(bsp_surface_index, "surface_" + str(bsp_surface_index))
     else:
         bsp2d_node = bsp2d_nodes[bsp2d_node_index]
         children = [
@@ -117,6 +105,15 @@ def gen_leaf_node(bsp_leaf_index):
         children = [gen_bsp2d_reference_node(i) for i in range(bsp2d_ref_first, bsp2d_ref_first + bsp2d_ref_count)]
     return collada.scene.Node("leaf_" + str(bsp_leaf_index), children=children)
 
+def gen_plane_geometry_node(plane_index):
+    matching_bsp_surface_index = None
+    for i, bsp_surface in enumerate(bsp_surfaces):
+        if bsp_surface.plane & 0x7FFFFFFF == plane_index & 0x7FFFFFFF:
+            matching_bsp_surface_index = i
+    if matching_bsp_surface_index is None:
+        return None
+    return gen_surface_node(i, "plane_" + str(plane_index))
+
 def gen_bsp3d_node(bsp3d_node_index):
     if bsp3d_node_index == -1:
         return None
@@ -128,17 +125,16 @@ def gen_bsp3d_node(bsp3d_node_index):
         bsp3d_node_name = "bsp3d_node_" + str(bsp3d_node_index)
         back_child_node = gen_bsp3d_node(bsp3d_node.back_child)
         front_child_node = gen_bsp3d_node(bsp3d_node.front_child)
+        plane = gen_plane_geometry_node(bsp3d_node.plane)
 
         children = []
-        # children.append(gen_plane_geometry_node(bsp3d_node.plane, bsp3d_node_index))
+
+        if plane is not None:
+            children.append(plane)
         if back_child_node is not None:
             children.append(back_child_node)
-        else:
-            print(bsp3d_node_name + " has -1 back child")
         if front_child_node is not None:
             children.append(front_child_node)
-        else:
-            print(bsp3d_node_name + " has -1 front child")
         return collada.scene.Node(bsp3d_node_name, children=children)
 
 #https://pycollada.readthedocs.io/en/latest/creating.html
