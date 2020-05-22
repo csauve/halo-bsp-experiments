@@ -112,7 +112,7 @@ def gen_plane_geometry_node(plane_index):
             matching_bsp_surface_index = i
     if matching_bsp_surface_index is None:
         return None
-    return gen_surface_node(i, "plane_" + str(plane_index))
+    return gen_surface_node(matching_bsp_surface_index, "plane_" + str(plane_index))
 
 def gen_bsp3d_node(bsp3d_node_index):
     if bsp3d_node_index == -1:

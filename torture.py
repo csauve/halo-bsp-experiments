@@ -6,6 +6,10 @@ tag = sbsp_def.build(filepath=bsp_path)
 bsp = tag.data.tagdata
 bsp_verts = bsp.collision_bsp.collision_bsp_array[0].vertices.vertices_array
 bsp_planes = bsp.collision_bsp.collision_bsp_array[0].planes.planes_array
+bsp3d_nodes = bsp.collision_bsp.collision_bsp_array[0].bsp3d_nodes.bsp3d_nodes_array
+bsp_leaves = bsp.collision_bsp.collision_bsp_array[0].leaves.leaves_array
+bsp_surfaces = bsp.collision_bsp.collision_bsp_array[0].surfaces.surfaces_array
+bsp_materials = bsp.collision_bsp.collision_bsp_array[0].materials.materials_array
 
 def mess_up_verts():
     for vert in bsp_verts:
@@ -24,8 +28,13 @@ def offset_planes():
     for plane in bsp_planes:
         plane.i -= 0.001
 
+def spiderman():
+    for surface in bsp_surfaces:
+        surface.flags.climbable = True
+
 # mess_up_verts()
 # mess_up_planes()
-offset_planes()
+# offset_planes()
+spiderman()
 
 tag.serialize(backup=False, temp=False)
