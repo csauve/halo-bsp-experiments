@@ -1,4 +1,6 @@
 *.dae
 *.blend
 *.blend1
+*.scenario_structure_bsp
+*.scenario_structure_bsp.bak
 notes.txt

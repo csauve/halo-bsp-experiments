@@ -5,7 +5,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 #https://github.com/Sigmmma/reclaimer/blob/master/reclaimer/hek/defs/coll.py
-bsp_path = "/home/csauve/haloce/tags/levels/test/dangercanyon/dangercanyon.scenario_structure_bsp"
+bsp_path = "./dangercanyon.scenario_structure_bsp"
 bsp = sbsp_def.build(filepath=bsp_path).data.tagdata
 bsp3d_nodes = bsp.collision_bsp.collision_bsp_array[0].bsp3d_nodes.bsp3d_nodes_array
 bsp2d_nodes = bsp.collision_bsp.collision_bsp_array[0].bsp2d_nodes.bsp2d_nodes_array
