@@ -26,11 +26,6 @@ mtl_surface = collada.material.Material("mtl_surface", "mtl_surface", mtl_effect
 dae.effects.append(mtl_effect_surface)
 dae.materials.append(mtl_surface)
 
-mtl_effect_surface_flagged = collada.material.Effect("mtl_effect_surface_flagged", [], "phong", diffuse=(1.0, 0.5, 0.5), specular=(0, 1, 0))
-mtl_surface_flagged = collada.material.Material("mtl_surface_flagged", "mtl_surface_flagged", mtl_effect_surface_flagged)
-dae.effects.append(mtl_effect_surface_flagged)
-dae.materials.append(mtl_surface_flagged)
-
 sfc_count = 0
 
 def gen_surface_geometry(bsp_vert_indices, bsp_plane_index, surface_name):
@@ -41,8 +36,6 @@ def gen_surface_geometry(bsp_vert_indices, bsp_plane_index, surface_name):
     mtl_name = "mtl_surface"
     if bsp_plane_index < 0 or bsp_plane_index >= len(normal_floats):
         bsp_plane_index = bsp_plane_index & 0x7FFFFFFF
-        mtl_name = "mtl_surface_flagged"
-        # print("Flagged plane index? " + str(bsp_plane_index))
 
     normal_src_name = surface_name + "_normals"
     surface_normal_floats = np.array(normal_floats[bsp_plane_index])
