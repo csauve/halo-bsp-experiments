@@ -2,8 +2,8 @@ from reclaimer.hek.defs.sbsp import sbsp_def
 import numpy as np
 
 # check for numbers "close enough" to zero to account for rounding/precision issues
-def very_small(n):
-    return abs(n) < 0.001
+def zeroish(n, threshold):
+    return abs(n) < threshold
 
 # the following few math functions before fix_bsp expect numpy types
 def to_np_point(point):
@@ -20,6 +20,10 @@ def point_cmp_plane(point, plane):
     point_vec = point - plane_origin
     product = np.dot(point_vec, plane_normal)
     return product
+
+def dist(point_a, point_b):
+    offset = point_b - point_a
+    return np.sqrt(offset.dot(offset))
 
 # https://en.wikipedia.org/wiki/Line%E2%80%93plane_intersection
 def t_line_plane_intersection(start, end, plane):
@@ -128,8 +132,11 @@ def fix_bsp(bsp_tag_path, report_only=False):
             plane = to_np_plane(planes[plane_index & 0x7FFFFFFF], is_front)
             start_cmp = point_cmp_plane(edge_start, plane)
             end_cmp = point_cmp_plane(edge_end, plane)
-            # If line is co-planar with one of the planes it cannot be inside the volume
-            if very_small(start_cmp) and very_small(end_cmp):
+            # If line is co-planar with one of the planes it cannot be inside the
+            # volume. This thredshold is super sensitive... too high and we miss
+            # phantom BSP on very similar planes to parent node planes, but too
+            # low and we get false positive phantom BSP from low precision.
+            if zeroish(start_cmp, 0.0001) and zeroish(end_cmp, 0.0001):
                 return False
             t_intersection, entering = t_line_plane_intersection(edge_start, edge_end, plane)
             if t_intersection is not None:
@@ -144,26 +151,27 @@ def fix_bsp(bsp_tag_path, report_only=False):
         if t_entry_max is None or t_exit_min is None:
             return False
 
+        entry_point = lerp_points(edge_start, edge_end, t_entry_max)
+        exit_point = lerp_points(edge_start, edge_end, t_exit_min)
+
         # If entry and exit are essentially the same point, ignore
-        if very_small(t_exit_min - t_entry_max):
+        if zeroish(dist(entry_point, exit_point), 0.05):
             return False
 
         # We still need to check if the intersection points are outside the volume
-        entry_point = lerp_points(edge_start, edge_end, t_entry_max)
-        exit_point = lerp_points(edge_start, edge_end, t_exit_min)
         for plane_index, is_front, _bsp3d_node in halfspaces:
             plane = to_np_plane(planes[plane_index & 0x7FFFFFFF], is_front)
             entry_cmp = point_cmp_plane(entry_point, plane)
             exit_cmp = point_cmp_plane(exit_point, plane)
-            if not very_small(entry_cmp) and entry_cmp < 0.0:
+            if not zeroish(entry_cmp, 0.00001) and entry_cmp < 0.0:
                 return False
-            if not very_small(exit_cmp) and exit_cmp < 0.0:
+            if not zeroish(exit_cmp, 0.00001) and exit_cmp < 0.0:
                 return False
 
         return t_entry_max < t_exit_min
 
     # Determines if the plane is not obstructed by the surfaces under this node
-    def plane_unoccluded(dividing_plane_index, child_bsp3d_node_index, parent_halfspaces):
+    def plane_unoccluded(dividing_plane_index, child_bsp3d_node_index, bsp3d_node_index, parent_halfspaces):
         # meaning of flagged plane index is unknown...
         if dividing_plane_index & 0x80000000:
             dividing_plane_index = dividing_plane_index & 0x7FFFFFFF
@@ -185,15 +193,18 @@ def fix_bsp(bsp_tag_path, report_only=False):
         # Get the bounding edges of the extended surface which was used for the plane
         outer_edge_indices = get_extended_surface_outer_edges(plane_surface_index, surface_indices)
 
+        # todo: ignore cases where surrounding faces are convex
+
         # If any of the bounding edges pass inside the node's space, then the parent plane is exposed
         for outer_edge_index in outer_edge_indices:
             if edge_inside_polyhedron(outer_edge_index, parent_halfspaces):
-                print("Phantom BSP detected: plane={} surface={} edge={} leaf={} path={}".format(
+                print("Phantom BSP detected: plane={} surface={} edge={} leaf={} path={}/{}".format(
                     dividing_plane_index,
                     plane_surface_index,
                     outer_edge_index,
                     child_bsp3d_node_index & 0x7FFFFFFF,
-                    "/".join([str(n & 0x7FFFFFFF) for (_p, _f, n) in parent_halfspaces])
+                    "/".join([str(n & 0x7FFFFFFF) for (_p, _f, n) in parent_halfspaces]),
+                    bsp3d_node_index
                 ))
                 return True
         return False
@@ -212,7 +223,7 @@ def fix_bsp(bsp_tag_path, report_only=False):
         # most common case. What a -1 front child looks like is unknown and how
         # to fix it (if it even needs fixing) is TBD with more research.
         if bsp3d_node.back_child == -1 and bsp3d_node.front_child & 0x80000000 != 0:
-            if plane_unoccluded(bsp3d_node.plane, bsp3d_node.front_child, parent_halfspaces):
+            if plane_unoccluded(bsp3d_node.plane, bsp3d_node.front_child, bsp3d_node_index, parent_halfspaces):
                 if not report_only:
                     bsp3d_node.back_child = bsp3d_node.front_child
 
@@ -226,4 +237,4 @@ def fix_bsp(bsp_tag_path, report_only=False):
     if not report_only:
         tag.serialize(backup=False, temp=False)
 
-fix_bsp("./dangercanyon.scenario_structure_bsp", True)
+fix_bsp("./bloodgulch.scenario_structure_bsp", False)
