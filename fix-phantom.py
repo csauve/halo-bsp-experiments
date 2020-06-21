@@ -1,5 +1,6 @@
 from reclaimer.hek.defs.sbsp import sbsp_def
 import numpy as np
+import argparse
 
 # check for numbers "close enough" to zero to account for rounding/precision issues
 def zeroish(n, threshold):
@@ -237,4 +238,7 @@ def fix_bsp(bsp_tag_path, report_only=False):
     if not report_only:
         tag.serialize(backup=False, temp=False)
 
-fix_bsp("./bloodgulch.scenario_structure_bsp", False)
+parser = argparse.ArgumentParser()
+parser.add_argument("bsp", help="Path to the BSP file to modify")
+args = parser.parse_args()
+fix_bsp(args.bsp, False)
