@@ -2,5 +2,5 @@
 *.blend
 *.blend1
 *.scenario_structure_bsp
-*.scenario_structure_bsp.bak
+*.bak
 notes.txt

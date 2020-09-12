@@ -1,8 +1,11 @@
 # Halo BSP experiments
 This repo contains a few scripts used to experiment with and visualize Halo's `scenario_structure_bsp` tag structure with the goal of reverse engineering game behaviour, documenting field purposes, and trying to solve the longstanding phantom BSP problem.
 
-## torture.py
-Alters BSP data in various ways to see how the game reacts.
+## insanity.py
+Translates the entire BSP and player spawns by any offset. Allows the BSP to be moved to extremely distant locations where 32-bit float precision shows its limits. The game has a limit of 5000 world units in any direction.
+
+## spiderman.py
+Makes all surfaces climbable like a ladder.
 
 ## fix-phantom.py
 Attempt to create a generic tool to find and fix phantom BSP in a collision mesh.
