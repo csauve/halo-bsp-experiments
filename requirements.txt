@@ -2,3 +2,4 @@ reclaimer
 pycollada
 numpy
 scipy
+Pillow

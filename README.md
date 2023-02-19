@@ -1,6 +1,11 @@
 # Halo BSP experiments
 This repo contains a few scripts used to experiment with and visualize Halo's `scenario_structure_bsp` tag structure with the goal of reverse engineering game behaviour, documenting field purposes, and trying to solve the longstanding phantom BSP problem.
 
+## port_lm.py
+Attempts to transplant a lightmap from an earlier version of a BSP to a similar new one without having to rebake lighting. Minor BSP changes to correct portals or phantom collision may unpredictably change how render mesh surfaces are unwrapped and packed to lightmap pages, so this script repacks all lightmap pages into a single uberlightmap and builds UV coordinate transforms, mapping all lightmap UVs in the target BSP to a transformed version of the source BSP's UVs. Vertex matching is done by proximity, texture UV, and normal similarity, since the ordering of vertices will be unpredictable.
+
+This script sort of works!
+
 ## insanity.py
 Translates the entire BSP and player spawns by any offset. Allows the BSP to be moved to extremely distant locations where 32-bit float precision shows its limits. The game has a limit of 5000 world units in any direction.
 
